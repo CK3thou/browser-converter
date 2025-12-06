@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings - Text Converter Pro</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Text Converter Pro</h1>
+      <p class="subtitle">Configure your conversion preferences</p>
+    </div>
+
+    <div class="settings-grid">
+      <!-- Timezone Settings -->
+      <div class="setting-card">
+        <div class="card-header">
+          <h2>⏰ Timezone Settings</h2>
+          <p class="card-description">Select the timezone for time conversions</p>
+        </div>
+        
+        <div class="form-group">
+          <label for="timezone-select">Preferred Timezone:</label>
+          <select id="timezone-select">
+            <option value="">Loading timezones...</option>
+          </select>
+          <small class="helper-text">Current system timezone will be auto-detected</small>
+        </div>
+
+        <div class="info-box">
+          <strong>Current System Timezone:</strong>
+          <span id="current-timezone"></span>
+        </div>
+      </div>
+
+      <!-- Currency Settings -->
+      <div class="setting-card">
+        <div class="card-header">
+          <h2>💱 Currency Settings</h2>
+          <p class="card-description">Select the currency for amount conversions</p>
+        </div>
+
+        <div class="form-group">
+          <label for="currency-select">Preferred Currency:</label>
+          <select id="currency-select">
+            <option value="">Loading currencies...</option>
+          </select>
+          <small class="helper-text">All conversions will be to this currency</small>
+        </div>
+
+        <div class="info-box">
+          <strong>Exchange Rates:</strong>
+          <p class="rates-info">Updated from exchangerate-api.com every hour</p>
+          <button id="update-rates-btn" class="secondary-btn">Update Now</button>
+        </div>
+      </div>
+
+      <!-- Conversion Examples -->
+      <div class="setting-card">
+        <div class="card-header">
+          <h2>📝 How It Works</h2>
+          <p class="card-description">Examples of supported conversions</p>
+        </div>
+
+        <div class="examples">
+          <div class="example-item">
+            <strong>Times with Timezone:</strong>
+            <code>3:30 PM EST</code> → <code>12:30 PM PST</code>
+          </div>
+          <div class="example-item">
+            <strong>Currency Amounts:</strong>
+            <code>$100 USD</code> → <code>92.50 EUR</code>
+          </div>
+          <div class="example-item">
+            <strong>Simply highlight</strong> text on any webpage to see instant conversions!
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <button id="save-btn" class="primary-btn">Save Settings</button>
+      <button id="reset-btn" class="secondary-btn">Reset to Defaults</button>
+      <span id="status-message" class="status-message"></span>
+    </div>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>
