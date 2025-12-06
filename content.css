@@ -88,6 +88,20 @@
   font-size: 13px;
 }
 
+.converted-text.loading {
+  animation: pulse 1.5s ease-in-out infinite;
+  opacity: 0.7;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 .conversion-arrow {
   color: white;
   font-size: 18px;
@@ -115,11 +129,16 @@
   transition: all 0.2s ease;
 }
 
-.copy-btn:hover {
+.copy-btn:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.3);
   transform: translateY(-2px);
 }
 
-.copy-btn:active {
+.copy-btn:active:not(:disabled) {
   transform: translateY(0);
+}
+
+.copy-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }

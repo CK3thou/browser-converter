@@ -23,35 +23,30 @@ function handleTextSelection() {
   }
 }
 
-async function showConversionPopup() {
+function showConversionPopup() {
   // Remove any existing popup
   const existingPopup = document.getElementById('text-converter-popup');
   if (existingPopup) {
     existingPopup.remove();
   }
 
-  // Determine conversion type
+  // Determine conversion type instantly
   let conversionType = 'unknown';
-  let conversionResult = null;
 
   if (isTimeWithTimezone(selectedText)) {
     conversionType = 'time';
-    conversionResult = await convertTime(selectedText);
   } else if (isCurrency(selectedText)) {
     conversionType = 'currency';
-    conversionResult = await convertCurrency(selectedText);
   } else {
     return; // Not a recognized format
   }
-
-  if (!conversionResult) return;
 
   // Get popup position
   const rect = selectionRange.getBoundingClientRect();
   const popupX = rect.left + window.scrollX;
   const popupY = rect.top + window.scrollY - 60;
 
-  // Create popup element
+  // Create popup element with loading state
   const popup = document.createElement('div');
   popup.id = 'text-converter-popup';
   popup.className = `converter-popup converter-${conversionType}`;
@@ -64,10 +59,10 @@ async function showConversionPopup() {
       <div class="popup-body">
         <div class="original-text">${escapeHtml(selectedText)}</div>
         <div class="conversion-arrow">→</div>
-        <div class="converted-text">${escapeHtml(conversionResult)}</div>
+        <div class="converted-text loading">Converting...</div>
       </div>
       <div class="popup-footer">
-        <button class="copy-btn">Copy Result</button>
+        <button class="copy-btn" disabled>Copy Result</button>
       </div>
     </div>
   `;
@@ -84,22 +79,47 @@ async function showConversionPopup() {
     popup.remove();
   });
 
-  // Copy button handler
-  popup.querySelector('.copy-btn').addEventListener('click', () => {
-    navigator.clipboard.writeText(conversionResult).then(() => {
-      const btn = popup.querySelector('.copy-btn');
-      btn.textContent = 'Copied!';
-      setTimeout(() => {
-        btn.textContent = 'Copy Result';
-      }, 2000);
-    });
-  });
-
   // Remove popup on next selection
   document.addEventListener('mousedown', function removePopupOnClick() {
     popup.remove();
     document.removeEventListener('mousedown', removePopupOnClick);
   }, { once: true });
+
+  // Fetch conversion result asynchronously
+  if (conversionType === 'time') {
+    convertTime(selectedText).then(result => {
+      const convertedText = popup.querySelector('.converted-text');
+      if (convertedText && popup.parentNode) {
+        convertedText.textContent = escapeHtml(result);
+        convertedText.classList.remove('loading');
+        updateCopyButton(popup, result);
+      }
+    });
+  } else if (conversionType === 'currency') {
+    convertCurrency(selectedText).then(result => {
+      const convertedText = popup.querySelector('.converted-text');
+      if (convertedText && popup.parentNode) {
+        convertedText.textContent = escapeHtml(result);
+        convertedText.classList.remove('loading');
+        updateCopyButton(popup, result);
+      }
+    });
+  }
+}
+
+function updateCopyButton(popup, conversionResult) {
+  const copyBtn = popup.querySelector('.copy-btn');
+  if (copyBtn) {
+    copyBtn.disabled = false;
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(conversionResult).then(() => {
+        copyBtn.textContent = 'Copied!';
+        setTimeout(() => {
+          copyBtn.textContent = 'Copy Result';
+        }, 2000);
+      });
+    });
+  }
 }
 
 function isTimeWithTimezone(text) {
