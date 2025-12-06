@@ -130,25 +130,81 @@ function isCurrency(text) {
   return CURRENCY_REGEX.test(text);
 }
 
+function parseUtcOffset(offsetStr) {
+  // Parse offset like "-05:00" or "+01:00" into milliseconds
+  const match = offsetStr.match(/([+-])(\d{2}):(\d{2})/);
+  if (!match) return 0;
+  const sign = match[1] === '+' ? 1 : -1;
+  const hours = parseInt(match[2], 10);
+  const minutes = parseInt(match[3], 10);
+  return sign * (hours * 3600 + minutes * 60) * 1000; // Convert to milliseconds
+}
+
 function convertTime(timeText) {
   return new Promise((resolve) => {
-    chrome.storage.sync.get(['preferredTimezone'], (result) => {
+    chrome.storage.sync.get(['preferredTimezone'], async (result) => {
       const preferredTz = result.preferredTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
-      
+
       try {
-        // Parse time (simplified - assumes today's date)
-        const timeMatch = timeText.match(/(\d{1,2}):(\d{2})\s*(?:AM|PM|am|pm)?/);
+        // Parse time (supports H:MM, HH:MM, optional AM/PM)
+        const timeMatch = timeText.match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM|am|pm)?/);
         if (!timeMatch) return resolve(null);
 
-        const hours = parseInt(timeMatch[1]);
-        const minutes = parseInt(timeMatch[2]);
-        
-        // Create date object
-        const today = new Date();
-        today.setHours(hours, minutes, 0, 0);
+        let hours = parseInt(timeMatch[1], 10);
+        const minutes = parseInt(timeMatch[2] || '0', 10);
+        const ampm = timeMatch[3];
 
-        // Format in preferred timezone
-        const formatter = new Intl.DateTimeFormat('en-US', {
+        if (ampm) {
+          const lower = ampm.toLowerCase();
+          if (lower === 'pm' && hours !== 12) hours += 12;
+          if (lower === 'am' && hours === 12) hours = 0;
+        }
+
+        // Try to detect source timezone token from the text (e.g., 'EST', 'UTC', or IANA like 'America/New_York')
+        const tzTokenMatch = timeText.match(/([A-Za-z_\\/]+|UTC[+-]?\d{1,2}|GMT[+-]?\d{1,2}|[A-Z]{2,4})$/i);
+        const sourceTzToken = tzTokenMatch ? tzTokenMatch[1] : null;
+
+        // Use worldtimeapi.org via the helper if available
+        if (window.worldTimeApiConvert) {
+          try {
+            const apiResp = await window.worldTimeApiConvert({
+              fromTimeZone: sourceTzToken || 'UTC',
+              toTimeZone: preferredTz,
+              dateTime: null
+            });
+
+            if (apiResp && apiResp.fromTimezone && apiResp.toTimezone) {
+              // Extract UTC offsets from both timezones
+              const fromOffset = parseUtcOffset(apiResp.fromTimezone.utc_offset);
+              const toOffset = parseUtcOffset(apiResp.toTimezone.utc_offset);
+              const timeDiff = toOffset - fromOffset; // Difference in milliseconds
+
+              // Create a date for the parsed time and adjust by the timezone difference
+              const adjustedDate = new Date();
+              adjustedDate.setHours(hours, minutes, 0, 0);
+              adjustedDate.setTime(adjustedDate.getTime() + timeDiff);
+
+              // Format in the target timezone
+              const formatter = new Intl.DateTimeFormat('en-US', {
+                timeZone: preferredTz,
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true
+              });
+              const formatted = formatter.format(adjustedDate);
+              return resolve(`${formatted} (${preferredTz})`);
+            }
+          } catch (apiErr) {
+            console.warn('worldtimeapi helper error, falling back:', apiErr);
+            // continue to fallback
+          }
+        }
+
+        // Fallback: format using browser's Intl
+        const fallbackDate = new Date();
+        fallbackDate.setHours(hours, minutes, 0, 0);
+
+        const fallbackFormatter = new Intl.DateTimeFormat('en-US', {
           timeZone: preferredTz,
           hour: '2-digit',
           minute: '2-digit',
@@ -156,8 +212,7 @@ function convertTime(timeText) {
           hour12: true
         });
 
-        const converted = formatter.format(today);
-        resolve(`${converted} (${preferredTz})`);
+        resolve(`${fallbackFormatter.format(fallbackDate)} (${preferredTz})`);
       } catch (e) {
         console.error('Time conversion error:', e);
         resolve(null);
