@@ -130,6 +130,26 @@ function isCurrency(text) {
   return CURRENCY_REGEX.test(text);
 }
 
+function getTimezoneOffset(timezone) {
+  // Get the UTC offset for a timezone by formatting a date
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+  
+  const utcDate = new Date();
+  const tzDate = new Date(formatter.format(utcDate).replace(/(\d+)\/(\d+)\/(\d+),\s(\d+):(\d+):(\d+)/, '$3-$1-$2T$4:$5:$6'));
+  
+  // Calculate offset in milliseconds
+  return utcDate.getTime() - tzDate.getTime();
+}
+
 function parseUtcOffset(offsetStr) {
   // Parse offset like "-05:00" or "+01:00" into milliseconds
   const match = offsetStr.match(/([+-])(\d{2}):(\d{2})/);
@@ -142,7 +162,7 @@ function parseUtcOffset(offsetStr) {
 
 function convertTime(timeText) {
   return new Promise((resolve) => {
-    chrome.storage.sync.get(['preferredTimezone'], async (result) => {
+    chrome.storage.sync.get(['preferredTimezone'], (result) => {
       const preferredTz = result.preferredTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
 
       try {
@@ -160,59 +180,59 @@ function convertTime(timeText) {
           if (lower === 'am' && hours === 12) hours = 0;
         }
 
-        // Try to detect source timezone token from the text (e.g., 'EST', 'UTC', or IANA like 'America/New_York')
+        // Try to detect source timezone abbreviation/IANA from the text
         const tzTokenMatch = timeText.match(/([A-Za-z_\\/]+|UTC[+-]?\d{1,2}|GMT[+-]?\d{1,2}|[A-Z]{2,4})$/i);
-        const sourceTzToken = tzTokenMatch ? tzTokenMatch[1] : null;
+        let sourceTz = tzTokenMatch ? tzTokenMatch[1] : null;
 
-        // Use worldtimeapi.org via the helper if available
-        if (window.worldTimeApiConvert) {
-          try {
-            const apiResp = await window.worldTimeApiConvert({
-              fromTimeZone: sourceTzToken || 'UTC',
-              toTimeZone: preferredTz,
-              dateTime: null
-            });
+        // Map common timezone abbreviations to IANA timezones
+        const tzMap = {
+          'EST': 'America/New_York',
+          'EDT': 'America/New_York',
+          'CST': 'America/Chicago',
+          'CDT': 'America/Chicago',
+          'MST': 'America/Denver',
+          'MDT': 'America/Denver',
+          'PST': 'America/Los_Angeles',
+          'PDT': 'America/Los_Angeles',
+          'GMT': 'UTC',
+          'UTC': 'UTC',
+          'IST': 'Asia/Kolkata',
+          'JST': 'Asia/Tokyo',
+          'AEST': 'Australia/Sydney',
+          'AWST': 'Australia/Perth',
+          'ACST': 'Australia/Adelaide'
+        };
 
-            if (apiResp && apiResp.fromTimezone && apiResp.toTimezone) {
-              // Extract UTC offsets from both timezones
-              const fromOffset = parseUtcOffset(apiResp.fromTimezone.utc_offset);
-              const toOffset = parseUtcOffset(apiResp.toTimezone.utc_offset);
-              const timeDiff = toOffset - fromOffset; // Difference in milliseconds
-
-              // Create a date for the parsed time and adjust by the timezone difference
-              const adjustedDate = new Date();
-              adjustedDate.setHours(hours, minutes, 0, 0);
-              adjustedDate.setTime(adjustedDate.getTime() + timeDiff);
-
-              // Format in the target timezone
-              const formatter = new Intl.DateTimeFormat('en-US', {
-                timeZone: preferredTz,
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: true
-              });
-              const formatted = formatter.format(adjustedDate);
-              return resolve(`${formatted} (${preferredTz})`);
-            }
-          } catch (apiErr) {
-            console.warn('worldtimeapi helper error, falling back:', apiErr);
-            // continue to fallback
-          }
+        // Resolve timezone: use mapped abbreviation or assume it's a valid IANA timezone
+        if (sourceTz && tzMap[sourceTz.toUpperCase()]) {
+          sourceTz = tzMap[sourceTz.toUpperCase()];
+        } else if (!sourceTz) {
+          sourceTz = preferredTz; // If no source timezone, assume it's in preferred timezone
         }
 
-        // Fallback: format using browser's Intl
-        const fallbackDate = new Date();
-        fallbackDate.setHours(hours, minutes, 0, 0);
+        // Create a test date and get offset for source and target timezones
+        const now = new Date();
+        const sourceOffset = getTimezoneOffset(sourceTz);
+        const targetOffset = getTimezoneOffset(preferredTz);
+        const offsetDiff = sourceOffset - targetOffset; // Difference in milliseconds
 
-        const fallbackFormatter = new Intl.DateTimeFormat('en-US', {
+        // Create the time in the source timezone
+        const sourceDate = new Date();
+        sourceDate.setHours(hours, minutes, 0, 0);
+
+        // Adjust by the timezone difference to get the target timezone time
+        const convertedDate = new Date(sourceDate.getTime() + offsetDiff);
+
+        // Format in the target timezone
+        const formatter = new Intl.DateTimeFormat('en-US', {
           timeZone: preferredTz,
           hour: '2-digit',
           minute: '2-digit',
-          second: '2-digit',
           hour12: true
         });
 
-        resolve(`${fallbackFormatter.format(fallbackDate)} (${preferredTz})`);
+        const formatted = formatter.format(convertedDate);
+        resolve(`${formatted} (${preferredTz})`);
       } catch (e) {
         console.error('Time conversion error:', e);
         resolve(null);
