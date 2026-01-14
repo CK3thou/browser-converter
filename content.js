@@ -343,6 +343,33 @@ function convertTime(timeText) {
   }
 }
 
+// Map currency symbols to codes
+const CURRENCY_SYMBOL_MAP = {
+  '$': 'USD',
+  '£': 'GBP',
+  '€': 'EUR',
+  '¥': 'JPY',
+  '₹': 'INR',
+  '₽': 'RUB',
+  '₩': 'KRW',
+  '₪': 'ILS',
+  '₨': 'PKR',
+  '₱': 'PHP',
+  '₡': 'CRC',
+  '₦': 'NGN',
+  '₲': 'PYG',
+  '₴': 'UAH',
+  '₵': 'GHS',
+  '₸': 'UAH',
+  '₺': 'TRY',
+  '₼': 'AZN',
+  '₾': 'GEL',
+  '￠': 'USD',
+  '￡': 'GBP',
+  '￥': 'CNY',
+  '￦': 'KRW'
+};
+
 // Helper function to detect system currency from locale
 function getSystemCurrency() {
   try {
@@ -354,16 +381,36 @@ function getSystemCurrency() {
   }
 }
 
+// Extract source currency code from text
+function extractSourceCurrency(currencyText) {
+  // Try to match 3-letter currency code first (e.g., USD, EUR, GBP)
+  const codeMatch = currencyText.match(/\b([A-Z]{3})\b/i);
+  if (codeMatch) {
+    return codeMatch[1].toUpperCase();
+  }
+  
+  // Try to match currency symbol
+  const symbolMatch = currencyText.match(/[$£€¥₹₽₩₪₨₱₡₦₲₴₵₸₺₼₾￠￡￥￦]/);
+  if (symbolMatch) {
+    return CURRENCY_SYMBOL_MAP[symbolMatch[0]] || 'USD';
+  }
+  
+  // Default to USD if no currency detected
+  return 'USD';
+}
+
 // Perform currency conversion using locally cached rates (instant, no latency!)
-function convertCurrencyLocally(amount, targetCurrency) {
+function convertCurrencyLocally(amount, sourceCurrency, targetCurrency) {
   const rates = cachedExchangeRates || FALLBACK_RATES;
   
-  if (!rates[targetCurrency]) {
+  if (!rates[sourceCurrency] || !rates[targetCurrency]) {
     return null;
   }
   
-  // Convert from USD to target currency
-  const convertedAmount = (amount * rates[targetCurrency]).toFixed(2);
+  // Convert from source currency to USD first, then to target currency
+  // Formula: amount_in_target = (amount / source_rate) * target_rate
+  // Simplified: amount * (target_rate / source_rate)
+  const convertedAmount = (amount * rates[targetCurrency] / rates[sourceCurrency]).toFixed(2);
   return convertedAmount;
 }
 
@@ -372,16 +419,17 @@ function convertCurrency(currencyText) {
   const targetCurrency = cachedPreferredCurrency || getSystemCurrency();
   
   try {
-    // Extract currency code and amount
-    const currencyMatch = currencyText.match(/([A-Z]{3}|\$|£|€|¥|₹|₽|₩|₪|₨|₱|₡|₦|₲|₴|₵|₸|₺|₼|₾)/i);
+    // Extract source currency from text
+    const sourceCurrency = extractSourceCurrency(currencyText);
+    
+    // Extract amount
     const amountMatch = currencyText.match(/(\d+(?:,\d{3})*(?:\.\d{2})?)/);
-
-    if (!currencyMatch || !amountMatch) return null;
+    if (!amountMatch) return null;
 
     const amount = parseFloat(amountMatch[1].replace(/,/g, ''));
     
-    // Convert using locally cached rates (instant, no network latency!)
-    const result = convertCurrencyLocally(amount, targetCurrency);
+    // Convert using locally cached rates with proper source/target currency
+    const result = convertCurrencyLocally(amount, sourceCurrency, targetCurrency);
     
     if (result) {
       return `${result} ${targetCurrency}`;
