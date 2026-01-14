@@ -288,10 +288,29 @@ function convertTime(timeText) {
   }
 }
 
+// Helper function to detect system currency from locale
+function getSystemCurrency() {
+  try {
+    // Get currency code from system locale
+    const formatter = new Intl.NumberFormat(undefined, { style: 'currency' });
+    const currencyCode = formatter.resolvedOptions().currency;
+    return currencyCode || 'USD';
+  } catch (e) {
+    console.error('Failed to detect system currency:', e);
+    return 'USD';
+  }
+}
+
 function convertCurrency(currencyText) {
   return new Promise((resolve) => {
     chrome.storage.sync.get(['preferredCurrency'], (result) => {
-      const preferredCurrency = result.preferredCurrency || 'USD';
+      // Use stored preference if set, otherwise use system currency
+      let preferredCurrency = result.preferredCurrency;
+      
+      if (!preferredCurrency || preferredCurrency === 'auto') {
+        // Auto-detect from system locale
+        preferredCurrency = getSystemCurrency();
+      }
       
       try {
         // Extract currency code and amount
