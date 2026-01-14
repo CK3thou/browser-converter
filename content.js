@@ -9,6 +9,7 @@ let cachedOffsets = {}; // Cache timezone offsets to avoid recalculation
 let cachedPreferredTz = null; // Cache preferred timezone from storage
 let cachedExchangeRates = null; // Cache exchange rates for instant conversion
 let cachedPreferredCurrency = null; // Cache preferred currency
+let preferencesLoaded = false; // Flag to ensure preferences are loaded before processing selections
 
 // Fallback rates (if API is unavailable)
 const FALLBACK_RATES = {
@@ -75,8 +76,11 @@ chrome.storage.local.get([CACHE_KEY], (result) => {
   cachedExchangeRates = (cached && cached.rates) ? cached.rates : FALLBACK_RATES;
 });
 
-// Load persisted preferences on page load
-loadPersistedPreferences();
+// Load persisted preferences on page load and enable text selection after loading
+loadPersistedPreferences().then(() => {
+  preferencesLoaded = true;
+  console.log('✓ Page ready: text selection enabled');
+});
 
 // Update cached timezone when storage changes
 chrome.storage.onChanged.addListener((changes) => {
@@ -98,6 +102,11 @@ chrome.storage.onChanged.addListener((changes) => {
 });
 
 function handleTextSelection() {
+  // Only process selections after preferences are loaded
+  if (!preferencesLoaded) {
+    return;
+  }
+  
   const selection = window.getSelection();
   
   if (selection.toString().length > 0) {
