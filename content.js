@@ -218,18 +218,7 @@ function showConversionPopup() {
   // Make converted currency clickable to change preference
   const convertedTextElement = popup.querySelector('.converted-text');
   if (conversionType === 'currency') {
-    convertedTextElement.style.cursor = 'pointer';
-    convertedTextElement.style.transition = 'all 0.2s ease';
-    
-    convertedTextElement.addEventListener('mouseover', () => {
-      convertedTextElement.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
-      convertedTextElement.style.transform = 'scale(1.05)';
-    });
-    
-    convertedTextElement.addEventListener('mouseout', () => {
-      convertedTextElement.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-      convertedTextElement.style.transform = 'scale(1)';
-    });
+    convertedTextElement.classList.add('clickable');
     
     convertedTextElement.addEventListener('click', (e) => {
       e.stopPropagation();
