@@ -146,21 +146,40 @@ function getSystemCurrency() {
   }
 }
 
-// Initialize storage on install
+// Initialize storage on install - called only once when extension is first installed
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.storage.sync.get(['preferredCurrency'], (result) => {
+  chrome.storage.sync.get(['preferredCurrency', 'preferredTimezone'], (result) => {
     // If user hasn't set a preferred currency yet, open onboarding
     if (!result.preferredCurrency) {
+      console.log('🔧 First install: Opening settings for currency selection');
       chrome.runtime.openOptionsPage();
     }
-  });
-  
-  chrome.storage.sync.set({
-    preferredTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    forexApiKey: DEFAULT_API_KEY
+    
+    // Initialize or preserve settings
+    const defaultSettings = {
+      preferredTimezone: result.preferredTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+      forexApiKey: DEFAULT_API_KEY
+    };
+    
+    chrome.storage.sync.set(defaultSettings, () => {
+      console.log('✓ Settings initialized on install:', defaultSettings);
+    });
   });
   
   // Fetch rates immediately on install
+  fetchAndCacheExchangeRates();
+});
+
+// On browser startup, verify preferences are still persisted
+chrome.runtime.onStartup.addListener(() => {
+  chrome.storage.sync.get(['preferredCurrency', 'preferredTimezone'], (result) => {
+    console.log('✓ Browser started - preferences restored from storage:', {
+      currency: result.preferredCurrency || 'Not set',
+      timezone: result.preferredTimezone || 'Not set'
+    });
+  });
+  
+  // Refresh exchange rates on browser startup
   fetchAndCacheExchangeRates();
 });
 

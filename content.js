@@ -49,22 +49,41 @@ chrome.storage.sync.get(['preferredTimezone'], (result) => {
   cachedPreferredTz = result.preferredTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
 });
 
+// Load all user preferences from persistent storage on script load
+function loadPersistedPreferences() {
+  return new Promise((resolve) => {
+    chrome.storage.sync.get(['preferredCurrency', 'preferredTimezone'], (result) => {
+      // Load currency (use saved preference or system default)
+      cachedPreferredCurrency = result.preferredCurrency || getSystemCurrency();
+      
+      // Load timezone (use saved preference or system default)
+      cachedPreferredTz = result.preferredTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+      
+      console.log('✓ Preferences loaded from storage:', {
+        currency: cachedPreferredCurrency,
+        timezone: cachedPreferredTz
+      });
+      
+      resolve();
+    });
+  });
+}
+
 // Pre-load exchange rates and preferred currency on script load
 chrome.storage.local.get([CACHE_KEY], (result) => {
   const cached = result[CACHE_KEY];
   cachedExchangeRates = (cached && cached.rates) ? cached.rates : FALLBACK_RATES;
 });
 
-// Use user's selected currency, or fall back to system if not set
-chrome.storage.sync.get(['preferredCurrency'], (result) => {
-  cachedPreferredCurrency = result.preferredCurrency || getSystemCurrency();
-});
+// Load persisted preferences on page load
+loadPersistedPreferences();
 
 // Update cached timezone when storage changes
 chrome.storage.onChanged.addListener((changes) => {
   if (changes.preferredTimezone) {
     cachedPreferredTz = changes.preferredTimezone.newValue || Intl.DateTimeFormat().resolvedOptions().timeZone;
     cachedOffsets = {}; // Clear cache when timezone changes
+    console.log('✓ Timezone updated:', cachedPreferredTz);
   }
   // Update exchange rates if background service updated them
   if (changes[CACHE_KEY]) {
@@ -74,6 +93,7 @@ chrome.storage.onChanged.addListener((changes) => {
   // Update preferred currency if changed
   if (changes.preferredCurrency) {
     cachedPreferredCurrency = changes.preferredCurrency.newValue || getSystemCurrency();
+    console.log('✓ Currency updated:', cachedPreferredCurrency);
   }
 });
 
@@ -252,9 +272,10 @@ function showCurrencySelector() {
     };
 
     btn.onclick = () => {
-      // Save selected currency
+      // Save selected currency to persistent storage (synced across sessions)
       chrome.storage.sync.set({ preferredCurrency: currency }, () => {
         cachedPreferredCurrency = currency;
+        console.log('✓ Currency preference saved:', currency);
         modal.remove();
         // Show conversion popup with selected currency
         showConversionPopup();
