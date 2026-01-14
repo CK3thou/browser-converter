@@ -152,10 +152,26 @@ function showConversionPopup() {
     return;
   }
 
-  // Get popup position
+  // Get popup position - place it right next to the highlighted text
   const rect = selectionRange.getBoundingClientRect();
-  const popupX = rect.left + window.scrollX;
-  const popupY = rect.top + window.scrollY - 60;
+  
+  // Position to the right of the selected text
+  let popupX = rect.right + window.scrollX + 8; // 8px gap from text
+  let popupY = rect.top + window.scrollY + (rect.height / 2); // Center vertically with text
+  
+  // Adjust if popup would go off-screen on the right
+  const estimatedPopupWidth = 320; // Approximate width
+  if (popupX + estimatedPopupWidth > window.innerWidth) {
+    // Move to left of text instead
+    popupX = rect.left + window.scrollX - estimatedPopupWidth - 8;
+  }
+  
+  // Adjust if popup would go off-screen at bottom
+  const estimatedPopupHeight = 150; // Approximate height
+  if (popupY + estimatedPopupHeight > window.innerHeight + window.scrollY) {
+    // Move above text
+    popupY = rect.top + window.scrollY - estimatedPopupHeight - 8;
+  }
 
   // Create popup element with result already calculated
   const popup = document.createElement('div');
@@ -207,10 +223,26 @@ const POPULAR_CURRENCIES = [
 ];
 
 function showCurrencySelector() {
-  // Get popup position near the selected text
+  // Get position near the selected text - to the right
   const rect = selectionRange.getBoundingClientRect();
-  const selectorX = rect.left + window.scrollX;
-  const selectorY = rect.top + window.scrollY - 60;
+  
+  // Position to the right of the selected text
+  let selectorX = rect.right + window.scrollX + 8; // 8px gap from text
+  let selectorY = rect.top + window.scrollY + (rect.height / 2); // Center vertically with text
+  
+  // Adjust if selector would go off-screen on the right
+  const estimatedSelectorWidth = 250;
+  if (selectorX + estimatedSelectorWidth > window.innerWidth) {
+    // Move to left of text instead
+    selectorX = rect.left + window.scrollX - estimatedSelectorWidth - 8;
+  }
+  
+  // Adjust if selector would go off-screen at bottom
+  const estimatedSelectorHeight = 400;
+  if (selectorY + estimatedSelectorHeight > window.innerHeight + window.scrollY) {
+    // Move above text
+    selectorY = rect.top + window.scrollY - estimatedSelectorHeight - 8;
+  }
 
   // Create currency selector modal
   const modal = document.createElement('div');
