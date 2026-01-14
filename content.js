@@ -1,11 +1,44 @@
 // Content script - runs on every webpage
 const TIMEZONE_REGEX = /(\d{1,2}):(\d{2})\s*(?:AM|PM|am|pm)?\s*(?:UTC|GMT|EST|CST|MST|PST|EDT|CDT|MDT|PDT|IST|JST|AEST|AWST|ACST|UTC[+-]\d{1,2}|[A-Z]{3,4})?/gi;
 const CURRENCY_REGEX = /[$£€¥₹₽₩₪₨₱₡₦₲₴₵₸₺₼₾￠￡￥￦][\s]?\d+(?:,\d{3})*(?:\.\d{2})?|(?:USD|EUR|GBP|JPY|INR|CAD|AUD|CHF|CNY|SEK|NZD|MXN|SGD|HKD|NOK|KRW|TRY|RUB|INR|BRL|ZAR)\s*[\s]?\d+(?:,\d{3})*(?:\.\d{2})?/gi;
+const CACHE_KEY = 'exchange_rates_cache';
 
 let selectedText = '';
 let selectionRange = null;
 let cachedOffsets = {}; // Cache timezone offsets to avoid recalculation
 let cachedPreferredTz = null; // Cache preferred timezone from storage
+let cachedExchangeRates = null; // Cache exchange rates for instant conversion
+let cachedPreferredCurrency = null; // Cache preferred currency
+
+// Fallback rates (if API is unavailable)
+const FALLBACK_RATES = {
+  'USD': 1.0, 'AED': 3.67, 'AFN': 65.0, 'ALL': 92.0, 'AMD': 390.0, 'ANG': 1.79,
+  'AOA': 835.0, 'ARS': 830.0, 'AUD': 1.53, 'AWG': 1.79, 'AZN': 1.70, 'BAM': 1.80,
+  'BBD': 2.0, 'BDT': 106.0, 'BGN': 1.80, 'BHD': 0.38, 'BIF': 2870.0, 'BMD': 1.0,
+  'BND': 1.36, 'BOB': 6.95, 'BRL': 5.21, 'BSD': 1.0, 'BTN': 82.0, 'BWP': 13.5,
+  'BYN': 3.30, 'BZD': 2.0, 'CAD': 1.36, 'CDF': 2620.0, 'CHF': 0.88, 'CLP': 920.0,
+  'CNY': 7.24, 'COP': 4100.0, 'CRC': 515.0, 'CUC': 1.0, 'CUP': 25.0, 'CVE': 103.0,
+  'CZK': 23.5, 'DJF': 177.0, 'DKK': 6.95, 'DOP': 58.0, 'DZD': 135.0, 'EGP': 49.0,
+  'ERN': 15.0, 'ETB': 127.0, 'EUR': 0.92, 'FJD': 2.25, 'FKP': 0.79, 'GBP': 0.79,
+  'GEL': 2.70, 'GHS': 15.0, 'GIP': 0.79, 'GMD': 67.0, 'GNF': 8620.0, 'GTQ': 7.85,
+  'GYD': 209.0, 'HKD': 7.81, 'HNL': 24.5, 'HRK': 6.90, 'HTG': 132.0, 'HUF': 370.0,
+  'IDR': 15650.0, 'ILS': 3.70, 'INR': 83.12, 'IQD': 1310.0, 'IRR': 42300.0, 'ISK': 138.0,
+  'JMD': 154.0, 'JOD': 0.71, 'JPY': 149.5, 'KES': 130.0, 'KGS': 85.0, 'KHR': 4100.0,
+  'KMF': 459.0, 'KPW': 900.0, 'KRW': 1319.0, 'KWD': 0.31, 'KYD': 0.83, 'KZT': 430.0,
+  'LAK': 21000.0, 'LBP': 89500.0, 'LKR': 300.0, 'LRD': 186.0, 'LSL': 18.5, 'LYD': 4.88,
+  'MAD': 9.90, 'MDL': 17.8, 'MGA': 4380.0, 'MKD': 57.5, 'MMK': 2100.0, 'MNT': 3400.0,
+  'MOP': 8.05, 'MRU': 39.0, 'MUR': 46.0, 'MVR': 15.4, 'MWK': 1060.0, 'MXN': 17.05,
+  'MYR': 4.68, 'MZN': 64.0, 'NAD': 18.5, 'NGN': 1550.0, 'NIO': 36.5, 'NOK': 10.48,
+  'NPR': 132.0, 'NZD': 1.67, 'OMR': 0.385, 'PAB': 1.0, 'PEN': 3.75, 'PGK': 3.55,
+  'PHP': 56.0, 'PKR': 278.0, 'PLN': 4.00, 'PYG': 7400.0, 'QAR': 3.64, 'RON': 4.97,
+  'RSD': 110.0, 'RUB': 99.99, 'RWF': 1310.0, 'SAR': 3.75, 'SBD': 8.30, 'SCR': 12.7,
+  'SDG': 503.0, 'SEK': 10.79, 'SGD': 1.34, 'SHP': 0.79, 'SLL': 21800.0, 'SOS': 571.0,
+  'SRD': 32.5, 'SSP': 130.0, 'STN': 22.8, 'SVC': 8.75, 'SYP': 12900.0, 'SZL': 18.5,
+  'THB': 35.5, 'TJS': 10.7, 'TMT': 3.50, 'TND': 3.15, 'TOP': 2.35, 'TRY': 33.45,
+  'TTD': 6.80, 'TWD': 32.0, 'TZS': 2530.0, 'UAH': 41.0, 'UGX': 3750.0, 'UYU': 43.0,
+  'UZS': 12800.0, 'VES': 36.0, 'VND': 25200.0, 'VUV': 120.0, 'WST': 2.85, 'XAF': 613.0,
+  'XCD': 2.70, 'XOF': 613.0, 'XPF': 110.0, 'YER': 250.0, 'ZAR': 18.75, 'ZMW': 26.5, 'ZWL': 50.0
+};
 
 // Listen for text selection
 document.addEventListener('mouseup', handleTextSelection);
@@ -16,11 +49,30 @@ chrome.storage.sync.get(['preferredTimezone'], (result) => {
   cachedPreferredTz = result.preferredTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
 });
 
+// Pre-load exchange rates and preferred currency on script load
+chrome.storage.local.get([CACHE_KEY], (result) => {
+  const cached = result[CACHE_KEY];
+  cachedExchangeRates = (cached && cached.rates) ? cached.rates : FALLBACK_RATES;
+});
+
+chrome.storage.sync.get(['preferredCurrency'], (result) => {
+  cachedPreferredCurrency = result.preferredCurrency || getSystemCurrency();
+});
+
 // Update cached timezone when storage changes
 chrome.storage.onChanged.addListener((changes) => {
   if (changes.preferredTimezone) {
     cachedPreferredTz = changes.preferredTimezone.newValue || Intl.DateTimeFormat().resolvedOptions().timeZone;
     cachedOffsets = {}; // Clear cache when timezone changes
+  }
+  // Update exchange rates if background service updated them
+  if (changes[CACHE_KEY]) {
+    const cached = changes[CACHE_KEY].newValue;
+    cachedExchangeRates = (cached && cached.rates) ? cached.rates : FALLBACK_RATES;
+  }
+  // Update preferred currency if changed
+  if (changes.preferredCurrency) {
+    cachedPreferredCurrency = changes.preferredCurrency.newValue || getSystemCurrency();
   }
 });
 
@@ -100,7 +152,7 @@ function showConversionPopup() {
     document.removeEventListener('mousedown', removePopupOnClick);
   }, { once: true });
 
-  // Process conversion immediately (synchronous)
+  // Process conversion immediately (fully synchronous, no latency!)
   if (conversionType === 'time') {
     const result = convertTime(selectedText);
     const convertedText = popup.querySelector('.converted-text');
@@ -112,14 +164,16 @@ function showConversionPopup() {
       }
     }
   } else if (conversionType === 'currency') {
-    convertCurrency(selectedText).then(result => {
-      const convertedText = popup.querySelector('.converted-text');
-      if (convertedText && popup.parentNode) {
-        convertedText.textContent = escapeHtml(result);
-        convertedText.classList.remove('loading');
+    // Instant currency conversion using cached rates - no async/promise needed!
+    const result = convertCurrency(selectedText);
+    const convertedText = popup.querySelector('.converted-text');
+    if (convertedText && popup.parentNode) {
+      convertedText.textContent = result ? escapeHtml(result) : 'Could not convert';
+      convertedText.classList.remove('loading');
+      if (result) {
         updateCopyButton(popup, result);
       }
-    });
+    }
   }
 }
 
@@ -291,53 +345,51 @@ function convertTime(timeText) {
 // Helper function to detect system currency from locale
 function getSystemCurrency() {
   try {
-    // Get currency code from system locale
     const formatter = new Intl.NumberFormat(undefined, { style: 'currency' });
-    const currencyCode = formatter.resolvedOptions().currency;
-    return currencyCode || 'USD';
+    return formatter.resolvedOptions().currency || 'USD';
   } catch (e) {
     console.error('Failed to detect system currency:', e);
     return 'USD';
   }
 }
 
+// Perform currency conversion using locally cached rates (instant, no latency!)
+function convertCurrencyLocally(amount, targetCurrency) {
+  const rates = cachedExchangeRates || FALLBACK_RATES;
+  
+  if (!rates[targetCurrency]) {
+    return null;
+  }
+  
+  // Convert from USD to target currency
+  const convertedAmount = (amount * rates[targetCurrency]).toFixed(2);
+  return convertedAmount;
+}
+
 function convertCurrency(currencyText) {
-  return new Promise((resolve) => {
-    chrome.storage.sync.get(['preferredCurrency'], (result) => {
-      // Use stored preference if set, otherwise use system currency
-      let preferredCurrency = result.preferredCurrency;
-      
-      if (!preferredCurrency || preferredCurrency === 'auto') {
-        // Auto-detect from system locale
-        preferredCurrency = getSystemCurrency();
-      }
-      
-      try {
-        // Extract currency code and amount
-        const currencyMatch = currencyText.match(/([A-Z]{3}|\$|£|€|¥|₹|₽|₩|₪|₨|₱|₡|₦|₲|₴|₵|₸|₺|₼|₾)/i);
-        const amountMatch = currencyText.match(/(\d+(?:,\d{3})*(?:\.\d{2})?)/);
+  // Use cached preference or auto-detect system currency
+  const targetCurrency = cachedPreferredCurrency || getSystemCurrency();
+  
+  try {
+    // Extract currency code and amount
+    const currencyMatch = currencyText.match(/([A-Z]{3}|\$|£|€|¥|₹|₽|₩|₪|₨|₱|₡|₦|₲|₴|₵|₸|₺|₼|₾)/i);
+    const amountMatch = currencyText.match(/(\d+(?:,\d{3})*(?:\.\d{2})?)/);
 
-        if (!currencyMatch || !amountMatch) return resolve(null);
+    if (!currencyMatch || !amountMatch) return null;
 
-        const amount = parseFloat(amountMatch[1].replace(/,/g, ''));
-        
-        // Request conversion from background script
-        chrome.runtime.sendMessage(
-          { action: 'convertCurrency', amount, preferredCurrency },
-          (response) => {
-            if (response && response.success) {
-              resolve(`${response.result} ${preferredCurrency}`);
-            } else {
-              resolve(null);
-            }
-          }
-        );
-      } catch (e) {
-        console.error('Currency conversion error:', e);
-        resolve(null);
-      }
-    });
-  });
+    const amount = parseFloat(amountMatch[1].replace(/,/g, ''));
+    
+    // Convert using locally cached rates (instant, no network latency!)
+    const result = convertCurrencyLocally(amount, targetCurrency);
+    
+    if (result) {
+      return `${result} ${targetCurrency}`;
+    }
+    return null;
+  } catch (e) {
+    console.error('Currency conversion error:', e);
+    return null;
+  }
 }
 
 function escapeHtml(text) {
