@@ -129,13 +129,70 @@ function loadSettings() {
   chrome.storage.sync.get(['preferredTimezone', 'preferredCurrency', 'forexApiKey'], (result) => {
     const systemTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const timezone = result.preferredTimezone || systemTimezone;
-    const currency = result.preferredCurrency || 'USD';
+    const currency = result.preferredCurrency || '';
     const apiKey = result.forexApiKey || '';
 
     timezoneSelect.value = timezone;
     currencySelect.value = currency;
     apiKeyInput.value = apiKey;
     currentTimezoneDisplay.textContent = systemTimezone;
+    
+    // Check if this is first-time setup (no preferred currency set)
+    if (!currency) {
+      showOnboardingPrompt();
+    }
+  });
+}
+
+function showOnboardingPrompt() {
+  // Show a special message for first-time users
+  const onboardingDiv = document.createElement('div');
+  onboardingDiv.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+  `;
+  
+  onboardingDiv.innerHTML = `
+    <div style="
+      background: white;
+      padding: 40px;
+      border-radius: 12px;
+      max-width: 500px;
+      text-align: center;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    ">
+      <h2 style="margin-bottom: 10px; color: #333;">Welcome to Text Converter Pro! 👋</h2>
+      <p style="margin-bottom: 30px; color: #666; font-size: 16px;">
+        Which currency would you like conversions to be in?
+      </p>
+      <p style="margin-bottom: 20px; color: #999; font-size: 14px;">
+        (You can change this anytime in settings)
+      </p>
+      <button id="onboarding-close" style="
+        background: #4CAF50;
+        color: white;
+        border: none;
+        padding: 12px 30px;
+        border-radius: 6px;
+        font-size: 16px;
+        cursor: pointer;
+      ">Got it! Let me select below</button>
+    </div>
+  `;
+  
+  document.body.appendChild(onboardingDiv);
+  
+  document.getElementById('onboarding-close').addEventListener('click', () => {
+    onboardingDiv.remove();
+    currencySelect.focus();
   });
 }
 
@@ -143,6 +200,11 @@ function saveSettings() {
   const timezone = timezoneSelect.value;
   const currency = currencySelect.value;
   const apiKey = apiKeyInput.value.trim();
+
+  if (!currency) {
+    showStatus('✗ Please select a currency', 'error');
+    return;
+  }
 
   if (!apiKey) {
     showStatus('✗ API key cannot be empty', 'error');

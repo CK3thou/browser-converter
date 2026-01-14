@@ -148,12 +148,16 @@ function getSystemCurrency() {
 
 // Initialize storage on install
 chrome.runtime.onInstalled.addListener(() => {
-  const systemCurrency = getSystemCurrency();
+  chrome.storage.sync.get(['preferredCurrency'], (result) => {
+    // If user hasn't set a preferred currency yet, open onboarding
+    if (!result.preferredCurrency) {
+      chrome.runtime.openOptionsPage();
+    }
+  });
   
   chrome.storage.sync.set({
     preferredTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    forexApiKey: DEFAULT_API_KEY,
-    preferredCurrency: systemCurrency  // Use system currency
+    forexApiKey: DEFAULT_API_KEY
   });
   
   // Fetch rates immediately on install

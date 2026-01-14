@@ -55,6 +55,7 @@ chrome.storage.local.get([CACHE_KEY], (result) => {
   cachedExchangeRates = (cached && cached.rates) ? cached.rates : FALLBACK_RATES;
 });
 
+// Use user's selected currency, or fall back to system if not set
 chrome.storage.sync.get(['preferredCurrency'], (result) => {
   cachedPreferredCurrency = result.preferredCurrency || getSystemCurrency();
 });
