@@ -109,12 +109,26 @@ function showConversionPopup() {
     return; // Not a recognized format
   }
 
+  // Calculate the conversion result BEFORE showing popup (no loading state needed!)
+  let conversionResult = null;
+  
+  if (conversionType === 'time') {
+    conversionResult = convertTime(selectedText);
+  } else if (conversionType === 'currency') {
+    conversionResult = convertCurrency(selectedText);
+  }
+
+  // Don't show popup if conversion failed
+  if (!conversionResult) {
+    return;
+  }
+
   // Get popup position
   const rect = selectionRange.getBoundingClientRect();
   const popupX = rect.left + window.scrollX;
   const popupY = rect.top + window.scrollY - 60;
 
-  // Create popup element with loading state
+  // Create popup element with result already calculated
   const popup = document.createElement('div');
   popup.id = 'text-converter-popup';
   popup.className = `converter-popup converter-${conversionType}`;
@@ -127,10 +141,10 @@ function showConversionPopup() {
       <div class="popup-body">
         <div class="original-text">${escapeHtml(selectedText)}</div>
         <div class="conversion-arrow">→</div>
-        <div class="converted-text loading">Converting...</div>
+        <div class="converted-text">${escapeHtml(conversionResult)}</div>
       </div>
       <div class="popup-footer">
-        <button class="copy-btn" disabled>Copy Result</button>
+        <button class="copy-btn">Copy Result</button>
       </div>
     </div>
   `;
@@ -147,35 +161,14 @@ function showConversionPopup() {
     popup.remove();
   });
 
+  // Setup copy button with the already-calculated result
+  updateCopyButton(popup, conversionResult);
+
   // Remove popup on next selection
   document.addEventListener('mousedown', function removePopupOnClick() {
     popup.remove();
     document.removeEventListener('mousedown', removePopupOnClick);
   }, { once: true });
-
-  // Process conversion immediately (fully synchronous, no latency!)
-  if (conversionType === 'time') {
-    const result = convertTime(selectedText);
-    const convertedText = popup.querySelector('.converted-text');
-    if (convertedText && popup.parentNode) {
-      convertedText.textContent = result ? escapeHtml(result) : 'Could not convert';
-      convertedText.classList.remove('loading');
-      if (result) {
-        updateCopyButton(popup, result);
-      }
-    }
-  } else if (conversionType === 'currency') {
-    // Instant currency conversion using cached rates - no async/promise needed!
-    const result = convertCurrency(selectedText);
-    const convertedText = popup.querySelector('.converted-text');
-    if (convertedText && popup.parentNode) {
-      convertedText.textContent = result ? escapeHtml(result) : 'Could not convert';
-      convertedText.classList.remove('loading');
-      if (result) {
-        updateCopyButton(popup, result);
-      }
-    }
-  }
 }
 
 function updateCopyButton(popup, conversionResult) {
