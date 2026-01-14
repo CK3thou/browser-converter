@@ -1,9 +1,9 @@
 // Background Service Worker
 
-const FOREX_API_KEY = '1e5ce0b6f7f9b60ffeb7b5f60dcf095d';
 const FOREX_API_URL = 'https://api.forexrateapi.com/v1/latest';
 const CACHE_KEY = 'exchange_rates_cache';
 const CACHE_DURATION = 3600000; // 1 hour in milliseconds
+const DEFAULT_API_KEY = '1e5ce0b6f7f9b60ffeb7b5f60dcf095d'; // Fallback default key
 
 // All supported currencies from the API
 const SUPPORTED_CURRENCIES = [
@@ -60,43 +60,48 @@ async function convertCurrencyAmount(amount, targetCurrency) {
 
 async function getExchangeRates() {
   return new Promise((resolve, reject) => {
-    chrome.storage.local.get([CACHE_KEY], (result) => {
-      const cached = result[CACHE_KEY];
+    // First, get the API key from secure storage
+    chrome.storage.sync.get(['forexApiKey'], (storageResult) => {
+      const apiKey = storageResult.forexApiKey || DEFAULT_API_KEY;
       
-      // Check if cache exists and is still valid
-      if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-        resolve(cached.rates);
-        return;
-      }
+      chrome.storage.local.get([CACHE_KEY], (result) => {
+        const cached = result[CACHE_KEY];
+        
+        // Check if cache exists and is still valid
+        if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+          resolve(cached.rates);
+          return;
+        }
 
-      // Build currency list parameter
-      const currencyParam = SUPPORTED_CURRENCIES.join(',');
+        // Build currency list parameter
+        const currencyParam = SUPPORTED_CURRENCIES.join(',');
 
-      // Fetch fresh rates from Forex Rate API
-      const apiUrl = `${FOREX_API_URL}?api_key=${FOREX_API_KEY}&base=USD&currencies=${encodeURIComponent(currencyParam)}`;
-      
-      fetch(apiUrl)
-        .then(response => response.json())
-        .then(data => {
-          if (data.success === false) {
-            throw new Error(data.error || 'API Error');
-          }
-          
-          const rates = data.rates || {};
-          const cacheData = {
-            rates,
-            timestamp: Date.now()
-          };
+        // Fetch fresh rates from Forex Rate API
+        const apiUrl = `${FOREX_API_URL}?api_key=${apiKey}&base=USD&currencies=${encodeURIComponent(currencyParam)}`;
+        
+        fetch(apiUrl)
+          .then(response => response.json())
+          .then(data => {
+            if (data.success === false) {
+              throw new Error(data.error || 'API Error');
+            }
+            
+            const rates = data.rates || {};
+            const cacheData = {
+              rates,
+              timestamp: Date.now()
+            };
 
-          // Save to cache
-          chrome.storage.local.set({ [CACHE_KEY]: cacheData });
-          resolve(rates);
-        })
-        .catch(error => {
-          console.error('Failed to fetch rates from forexrateapi.com:', error);
-          // Return fallback rates if API fails
-          resolve(FALLBACK_RATES);
-        });
+            // Save to cache
+            chrome.storage.local.set({ [CACHE_KEY]: cacheData });
+            resolve(rates);
+          })
+          .catch(error => {
+            console.error('Failed to fetch rates from forexrateapi.com:', error);
+            // Return fallback rates if API fails
+            resolve(FALLBACK_RATES);
+          });
+      });
     });
   });
 }
@@ -135,7 +140,8 @@ const FALLBACK_RATES = {
 // Initialize storage on install
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.sync.set({
-    preferredTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    preferredTimezone: Intl.,
+    forexApiKey: DEFAULT_API_KEY // Store API key securely on first installDateTimeFormat().resolvedOptions().timeZone,
     preferredCurrency: 'USD'
   });
 });

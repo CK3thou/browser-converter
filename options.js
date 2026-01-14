@@ -55,6 +55,8 @@ const resetBtn = document.getElementById('reset-btn');
 const updateRatesBtn = document.getElementById('update-rates-btn');
 const statusMessage = document.getElementById('status-message');
 const currentTimezoneDisplay = document.getElementById('current-timezone');
+const apiKeyInput = document.getElementById('api-key-input');
+const showApiKeyCheckbox = document.getElementById('show-api-key');
 
 // Calculate GMT offset for a timezone
 function getGMTOffset(timezone) {
@@ -124,13 +126,15 @@ function initializeSelects() {
 }
 
 function loadSettings() {
-  chrome.storage.sync.get(['preferredTimezone', 'preferredCurrency'], (result) => {
+  chrome.storage.sync.get(['preferredTimezone', 'preferredCurrency', 'forexApiKey'], (result) => {
     const systemTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const timezone = result.preferredTimezone || systemTimezone;
     const currency = result.preferredCurrency || 'USD';
+    const apiKey = result.forexApiKey || '';
 
     timezoneSelect.value = timezone;
     currencySelect.value = currency;
+    apiKeyInput.value = apiKey;
     currentTimezoneDisplay.textContent = systemTimezone;
   });
 }
@@ -138,12 +142,19 @@ function loadSettings() {
 function saveSettings() {
   const timezone = timezoneSelect.value;
   const currency = currencySelect.value;
+  const apiKey = apiKeyInput.value.trim();
+
+  if (!apiKey) {
+    showStatus('✗ API key cannot be empty', 'error');
+    return;
+  }
 
   chrome.storage.sync.set({
     preferredTimezone: timezone,
-    preferredCurrency: currency
+    preferredCurrency: currency,
+    forexApiKey: apiKey
   }, () => {
-    showStatus('✓ Settings saved successfully!', 'success');
+    showStatus('✓ Settings saved securely!', 'success');
     setTimeout(() => {
       statusMessage.textContent = '';
     }, 3000);
@@ -195,6 +206,15 @@ function updateRates() {
 
 function showStatus(message, type) {
   statusMessage.textContent = message;
+
+// Toggle API key visibility
+showApiKeyCheckbox.addEventListener('change', () => {
+  if (showApiKeyCheckbox.checked) {
+    apiKeyInput.type = 'text';
+  } else {
+    apiKeyInput.type = 'password';
+  }
+});
   statusMessage.className = `status-message ${type}`;
 }
 
