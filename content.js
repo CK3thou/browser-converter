@@ -92,10 +92,14 @@ function handleTextSelection() {
 }
 
 function showConversionPopup() {
-  // Remove any existing popup
+  // Remove any existing popup or selector
   const existingPopup = document.getElementById('text-converter-popup');
   if (existingPopup) {
     existingPopup.remove();
+  }
+  const existingSelector = document.getElementById('currency-selector-modal');
+  if (existingSelector) {
+    existingSelector.remove();
   }
 
   // Determine conversion type instantly
@@ -105,6 +109,11 @@ function showConversionPopup() {
     conversionType = 'time';
   } else if (isCurrency(selectedText)) {
     conversionType = 'currency';
+    // If currency is highlighted and no preference set, show currency selector first
+    if (!cachedPreferredCurrency) {
+      showCurrencySelector();
+      return;
+    }
   } else {
     return; // Not a recognized format
   }
@@ -169,6 +178,101 @@ function showConversionPopup() {
     popup.remove();
     document.removeEventListener('mousedown', removePopupOnClick);
   }, { once: true });
+}
+
+// List of popular currencies to show in selector
+const POPULAR_CURRENCIES = [
+  'USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'CHF', 'CNY', 'INR', 'MXN',
+  'SGD', 'HKD', 'NOK', 'KRW', 'TRY', 'RUB', 'BRL', 'ZAR', 'NZD', 'SEK'
+];
+
+function showCurrencySelector() {
+  // Get popup position near the selected text
+  const rect = selectionRange.getBoundingClientRect();
+  const selectorX = rect.left + window.scrollX;
+  const selectorY = rect.top + window.scrollY - 60;
+
+  // Create currency selector modal
+  const modal = document.createElement('div');
+  modal.id = 'currency-selector-modal';
+  modal.style.cssText = `
+    position: fixed;
+    left: ${selectorX}px;
+    top: ${selectorY}px;
+    z-index: 10001;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(200, 200, 200, 0.5);
+    padding: 12px;
+    min-width: 220px;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    max-height: 400px;
+    overflow-y: auto;
+  `;
+
+  // Add title
+  const title = document.createElement('div');
+  title.style.cssText = `
+    font-weight: 600;
+    font-size: 13px;
+    margin-bottom: 10px;
+    color: #333;
+  `;
+  title.textContent = 'Convert to:';
+  modal.appendChild(title);
+
+  // Create currency buttons
+  POPULAR_CURRENCIES.forEach(currency => {
+    const btn = document.createElement('button');
+    btn.textContent = currency;
+    btn.style.cssText = `
+      display: block;
+      width: 100%;
+      padding: 8px 12px;
+      margin-bottom: 6px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 12px;
+      transition: all 0.2s ease;
+    `;
+
+    btn.onmouseover = () => {
+      btn.style.transform = 'translateY(-2px)';
+      btn.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)';
+    };
+
+    btn.onmouseout = () => {
+      btn.style.transform = 'translateY(0)';
+      btn.style.boxShadow = 'none';
+    };
+
+    btn.onclick = () => {
+      // Save selected currency
+      chrome.storage.sync.set({ preferredCurrency: currency }, () => {
+        cachedPreferredCurrency = currency;
+        modal.remove();
+        // Show conversion popup with selected currency
+        showConversionPopup();
+      });
+    };
+
+    modal.appendChild(btn);
+  });
+
+  document.body.appendChild(modal);
+
+  // Close selector when clicking elsewhere
+  document.addEventListener('mousedown', function closeSelectorOnClick(e) {
+    if (!modal.contains(e.target) && e.target !== selectionRange.commonAncestorContainer) {
+      modal.remove();
+      document.removeEventListener('mousedown', closeSelectorOnClick);
+    }
+  });
 }
 
 function updateCopyButton(popup, conversionResult) {
